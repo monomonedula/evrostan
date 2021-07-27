@@ -28,15 +28,15 @@ class PanoIdOf:
             return None
         if data["status"] == "OK":
             return data["pano_id"]
-        raise ValueError(f"Bad response: {data}")
+        return None
 
-    def pano_location(self) -> Point:
+    def pano_location(self) -> Optional[Point]:
         data = self._resp()
         if data["status"] == "ZERO_RESULTS":
             return None
         if data["status"] == "OK":
             return Point(data["location"]["lat"], data["location"]["lng"])
-        raise ValueError(f"Bad response: {data}")
+        return None
 
     @lru_cache()
     def _resp(self):
