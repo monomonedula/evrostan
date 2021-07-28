@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "evrostan"
+name = "evrostan-crawler"
 version = "0.1.0"
 description = "our homeland"
 authors = ["monomonedula <valh@tuta.io>"]
@@ -11,6 +11,7 @@ requests = "^2.25.1"
 geopy = "^2.1.0"
 loguru = "^0.5.3"
 methodtools = "^0.4.3"
+click = "^8.0.1"
 
 [tool.poetry.dev-dependencies]
 
