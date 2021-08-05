@@ -94,7 +94,7 @@ class Pano:
     def location(self) -> Point:
         return self._location
 
-    def image_requests(self, fov: int = 90, width: int = 600, height: int = 400) -> List[ImgRequest]:
+    def image_requests(self, fov: int = 90, width: int = 900, height: int = 600) -> List[ImgRequest]:
         assert 360 % 90 == 0
         return [
             ImgRequest(
@@ -232,7 +232,7 @@ class Catalogue:
     def download(self, pano: Pano) -> bool:
         pano_folder = self._folder(self._dir, pano.id())
         images = []
-        for rq in pano.image_requests(self._fov):
+        for rq in pano.image_requests(fov=self._fov):
             logger.info(f"Downloading {rq.url!r} ...")
             resp = self._session.get(rq.url)
             if resp.ok:
@@ -248,7 +248,7 @@ class Catalogue:
 @click.argument('output_folder')
 @click.option('--glue', is_flag=True, help='Glue together pics of the panoramic view.')
 @click.option('--fov', default=90, help='field of view. Defaults to 90 degrees')
-@click.option('--square-side', default=500, help='Side of the square to be crawler. Defaults to 500 meters')
+@click.option('--square-side', default=1500, help='Side of the square to be crawler. Defaults to 1500 meters')
 @click.option('--step', default=10, help='Crawling step in meters. Defaults to 10')
 def main(centre: str, output_folder: str, glue: bool, fov: int, square_side: int, step: int):
     api_key = os.environ["STREETVIEW_API_KEY"]
