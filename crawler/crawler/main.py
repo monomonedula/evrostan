@@ -201,33 +201,17 @@ class PanoFolderGlued(PanoFolder):
         return [path]
 
 
-class Catalogue:
-    def __init__(self, directory: Path, session: requests.Session, fov: int,
-                 pano_folder: Callable[[Path, str], PanoFolder] = PanoFolderSimple):
-        self._dir: Path = directory
-        self._session: requests.Session = session
-        self._fov: int = fov
+class Saver:
+    def __init__(
+        self,
+        fov: int,
+        session: requests.Session,
+        path: Path, pano_folder: Callable[[Path, str], PanoFolder] = PanoFolderSimple
+    ):
         self._folder: Callable[[Path, str], PanoFolder] = pano_folder
-
-    def add(self, panos: Panos):
-        if (self._dir / "index.csv").exists():
-            raise ValueError(f"index.csv already exists in {self._dir}")
-        self._dir.mkdir(exist_ok=True)
-        with open(self._dir / "index.csv", "w") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["pano_id", "latitude", "longitude"])
-            panos_list = panos.as_list()
-            logger.info(f"Got {len(panos_list)} panos to explore.")
-            for i, pano in enumerate(panos_list, start=1):
-                logger.info(f"Getting pano {i} of {len(panos_list)}...")
-                if self.download(pano):
-                    writer.writerow(
-                        [
-                            pano.id(),
-                            pano.location().latitude,
-                            pano.location().longitude,
-                        ]
-                    )
+        self._session: requests.Session = session
+        self._dir: Path = path
+        self._fov: int = fov
 
     def download(self, pano: Pano) -> bool:
         pano_folder = self._folder(self._dir, pano.id())
@@ -243,6 +227,69 @@ class Catalogue:
         return len(images) > 0
 
 
+class Catalogue:
+    def __init__(self, directory: Path,
+                 saver: Saver):
+        self._dir: Path = directory
+        self._saver: Saver = saver
+
+    def add(self, panos: Panos):
+        if (self._dir / "index.csv").exists():
+            raise ValueError(f"index.csv already exists in {self._dir}")
+        self._dir.mkdir(exist_ok=True)
+        with open(self._dir / "index.csv", "w") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["pano_id", "latitude", "longitude"])
+            panos_list = panos.as_list()
+            logger.info(f"Got {len(panos_list)} panos to explore.")
+            for i, pano in enumerate(panos_list, start=1):
+                logger.info(f"Getting pano {i} of {len(panos_list)}...")
+                if self._saver.download(pano):
+                    writer.writerow(
+                        [
+                            pano.id(),
+                            pano.location().latitude,
+                            pano.location().longitude,
+                        ]
+                    )
+
+
+class CatalogueContinuing:
+    def __init__(self, directory: Path,
+                 saver: Saver,
+    ):
+        self._dir: Path = directory
+        self._saver: Saver = saver
+
+    def index_path(self) -> Path:
+        return self._dir / "index.csv"
+
+    def add(self, panos: Panos):
+        existing_panos = set()
+        with self.index_path().open() as f:
+            for row in csv.reader(f):
+                pano_id, lat, lng = row
+                logger.info(f"Present {pano_id.strip()}")
+                existing_panos.add(pano_id.strip())
+        with self.index_path().open("a") as csvfile:
+            writer = csv.writer(csvfile)
+            panos_list = panos.as_list()
+            logger.info(f"Got {len(panos_list)} panos to explore.")
+            for i, pano in enumerate(panos_list, start=1):
+                logger.info(f"Getting pano {i} of {len(panos_list)}...")
+                if pano.id() in existing_panos:
+                    logger.info(f"Skipping pano {i} (already present).")
+                else:
+                    if self._saver.download(pano):
+                        writer.writerow(
+                            [
+                                pano.id(),
+                                pano.location().latitude,
+                                pano.location().longitude,
+                            ]
+                        )
+
+
 @click.command()
 @click.argument('centre')
 @click.argument('output_folder')
@@ -250,14 +297,30 @@ class Catalogue:
 @click.option('--fov', default=90, help='field of view. Defaults to 90 degrees')
 @click.option('--square-side', default=1500, help='Side of the square to be crawler. Defaults to 1500 meters')
 @click.option('--step', default=10, help='Crawling step in meters. Defaults to 10')
-def main(centre: str, output_folder: str, glue: bool, fov: int, square_side: int, step: int):
+@click.option('--cont', is_flag=True, help='Continue crawling.')
+def main(centre: str, output_folder: str, glue: bool, fov: int, square_side: int, step: int, cont: bool):
     api_key = os.environ["STREETVIEW_API_KEY"]
     session = requests.session()
-    Catalogue(
-        Path(output_folder),
-        session,
-        fov,
-        PanoFolderSimple if not glue else PanoFolderGlued
+    (
+        CatalogueContinuing(
+            Path(output_folder),
+            Saver(
+                fov,
+                session,
+                Path(output_folder),
+                PanoFolderSimple if not glue else PanoFolderGlued
+            )
+        )
+        if cont else
+        Catalogue(
+            Path(output_folder),
+            Saver(
+                fov,
+                session,
+                Path(output_folder),
+                PanoFolderSimple if not glue else PanoFolderGlued
+            )
+        )
     ).add(
         Panos(
             PointsInSquare(
